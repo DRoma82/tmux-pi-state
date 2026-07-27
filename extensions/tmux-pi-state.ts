@@ -56,6 +56,7 @@ export default function (pi: ExtensionAPI) {
 			.then(async () => {
 				await captureOriginalPaneTitle();
 				await tmux(["select-pane", "-t", paneId, "-T", title]);
+				await tmux(["refresh-client", "-S"]);
 			})
 			.catch(() => undefined);
 		return updateQueue;
@@ -73,6 +74,7 @@ export default function (pi: ExtensionAPI) {
 	async function restorePaneTitle(): Promise<void> {
 		if (originalPaneTitle !== undefined) {
 			await tmux(["select-pane", "-t", paneId, "-T", originalPaneTitle]);
+			await tmux(["refresh-client", "-S"]);
 		}
 	}
 
