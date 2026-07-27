@@ -1,0 +1,23 @@
+{
+  "name": "tmux-pi-state",
+  "version": "0.1.0",
+  "description": "TPM plugin and Pi extension for showing Pi coding-agent state in tmux.",
+  "keywords": [
+    "tmux",
+    "tpm",
+    "pi-package",
+    "pi-coding-agent"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DRoma82/tmux-pi-state.git"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ]
+  }
+}
