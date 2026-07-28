@@ -7,14 +7,17 @@ Each Pi instance sets `@pi_pane_state` on its own tmux pane, then the extension 
 ```text
 π:      # one working Pi pane
 π:      # one waiting Pi pane
+π:      # one Pi pane finished while its window was inactive
 π:     # two waiting Pi panes in the same window
 π:     # one waiting, one working
+π:     # one waiting, one unseen background completion
 ```
 
 Glyphs:
 
 - working: `nf-fa-cog` U+F013
 - waiting: `nf-fa-check` U+F00C
+- unseen/background completion: `nf-fa-exclamation_circle` U+F06A
 
 Render it anywhere tmux formats are supported, usually next to `#W` in the window status format:
 
@@ -47,7 +50,8 @@ The Pi extension listens for Pi lifecycle events and updates tmux options:
 
 - `session_start` -> captures the current tmux window ID
 - `agent_start` -> sets this pane's `@pi_pane_state` to the gear icon, then recomputes window `@pi_state`
-- `agent_settled` / idle -> sets this pane's `@pi_pane_state` to the check icon, then recomputes window `@pi_state`
+- `agent_settled` / idle while window is active -> sets this pane's `@pi_pane_state` to the check icon, then recomputes window `@pi_state`
+- `agent_settled` / idle after finishing while window is inactive -> sets this pane's `@pi_pane_state` to the exclamation-circle icon, then recomputes window `@pi_state`
 - `session_shutdown` -> unsets this pane's `@pi_pane_state`, then recomputes or unsets window `@pi_state`
 
 No tmux-side plugin is required. The glyphs require a Nerd Font in your terminal.
@@ -66,5 +70,6 @@ PI_TMUX_STATE=0 pi
 
 - `@pi_state` is ordered by tmux pane order in the window.
 - If a Pi process exits cleanly, it removes only its own pane state and leaves other Pi pane states intact.
+- The unseen/background-completion marker is extension-only: it does not auto-clear on focus. It changes the next time that Pi instance publishes a state, such as when it starts working again or shuts down.
 - If Pi crashes or tmux kills the pane without a clean shutdown, that pane's `@pi_pane_state` may remain until the pane is closed or another Pi state update recomputes the window aggregate.
 - Because state is stored as tmux options rather than baked into `window_name`, it survives pane switches and does not interfere with automatic/window-name plugins.

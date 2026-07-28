@@ -5,11 +5,12 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 const execFileAsync = promisify(execFile);
 const TMUX_TIMEOUT_MS = 500;
 
-type PiTmuxState = "working" | "waiting";
+type PiTmuxState = "working" | "waiting" | "unseen";
 
 const STATE_ICONS: Record<PiTmuxState, string> = {
 	working: "\uF013", // nf-fa-cog
 	waiting: "\uF00C", // nf-fa-check
+	unseen: "\uF06A", // nf-fa-exclamation_circle
 };
 
 function enabled(): boolean {
@@ -51,6 +52,14 @@ export default function (pi: ExtensionAPI) {
 		return agentActive ? "working" : "waiting";
 	}
 
+	async function windowIsActive(): Promise<boolean> {
+		await captureWindowId();
+		if (windowId === undefined) {
+			return true;
+		}
+		return (await tmux(["display-message", "-p", "-t", windowId, "#{window_active}"])) === "1";
+	}
+
 	async function publishWindowState() {
 		await captureWindowId();
 		if (windowId === undefined) {
@@ -81,8 +90,7 @@ export default function (pi: ExtensionAPI) {
 		return updateQueue;
 	}
 
-	function publishState(force = false): void {
-		const state = desiredState();
+	function publishState(state = desiredState(), force = false): void {
 		if (!force && state === lastState) {
 			return;
 		}
@@ -117,8 +125,14 @@ export default function (pi: ExtensionAPI) {
 		if (!rootSession || ctx?.isIdle?.() !== true) {
 			return;
 		}
+
+		const finishedWork = agentActive;
 		agentActive = false;
-		publishState();
+
+		void (async () => {
+			const state = finishedWork && !(await windowIsActive()) ? "unseen" : "waiting";
+			publishState(state);
+		})();
 	});
 
 	pi.on("session_shutdown", async () => {
