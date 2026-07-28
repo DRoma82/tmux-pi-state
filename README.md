@@ -1,13 +1,20 @@
 # tmux-pi-state
 
-Pi package that exposes Pi coding-agent state to tmux as a window-scoped user option.
+Pi package that exposes Pi coding-agent state to tmux as window/pane-scoped user options.
 
-The extension sets `@pi_state` on the tmux window where Pi was started:
+Each Pi instance sets `@pi_pane_state` on its own tmux pane, then the extension aggregates all Pi pane states in that window into `@pi_state`:
 
 ```text
-π:  # working, nf-fa-cog U+F013
-π:  # waiting, nf-fa-check U+F00C
+π:      # one working Pi pane
+π:      # one waiting Pi pane
+π:     # two waiting Pi panes in the same window
+π:     # one waiting, one working
 ```
+
+Glyphs:
+
+- working: `nf-fa-cog` U+F013
+- waiting: `nf-fa-check` U+F00C
 
 Render it anywhere tmux formats are supported, usually next to `#W` in the window status format:
 
@@ -16,7 +23,7 @@ set -ga window-status-format " #I: #W #{@pi_state} "
 set -ga window-status-current-format " #I: #W #{@pi_state} "
 ```
 
-This avoids racing other window renamers: Pi does not call `rename-window`; it only updates the `@pi_state` cache. Tools such as `tmux-window-name` can continue owning the actual window name, while the status line displays Pi state alongside it.
+This avoids racing other window renamers: Pi does not call `rename-window`; it only updates tmux user options. Tools such as `tmux-window-name` can continue owning the actual window name, while the status line displays Pi state alongside it.
 
 ## Install
 
@@ -36,12 +43,12 @@ Then restart Pi or run `/reload`.
 
 ## How it works
 
-The Pi extension listens for Pi lifecycle events and updates a tmux window option:
+The Pi extension listens for Pi lifecycle events and updates tmux options:
 
 - `session_start` -> captures the current tmux window ID
-- `agent_start` -> sets `@pi_state` to `π:` + gear icon
-- `agent_settled` / idle -> sets `@pi_state` to `π:` + check icon
-- `session_shutdown` -> unsets `@pi_state`
+- `agent_start` -> sets this pane's `@pi_pane_state` to the gear icon, then recomputes window `@pi_state`
+- `agent_settled` / idle -> sets this pane's `@pi_pane_state` to the check icon, then recomputes window `@pi_state`
+- `session_shutdown` -> unsets this pane's `@pi_pane_state`, then recomputes or unsets window `@pi_state`
 
 No tmux-side plugin is required. The glyphs require a Nerd Font in your terminal.
 
@@ -57,5 +64,7 @@ PI_TMUX_STATE=0 pi
 
 ## Notes
 
-- This only tracks Pi state for the window where Pi was started. If you have multiple Pi sessions open in different panes of the same window, only the last one to update `@pi_state` wins.
-- Because the state is stored as a tmux window option rather than baked into `window_name`, it survives pane switches and does not interfere with automatic/window-name plugins.
+- `@pi_state` is ordered by tmux pane order in the window.
+- If a Pi process exits cleanly, it removes only its own pane state and leaves other Pi pane states intact.
+- If Pi crashes or tmux kills the pane without a clean shutdown, that pane's `@pi_pane_state` may remain until the pane is closed or another Pi state update recomputes the window aggregate.
+- Because state is stored as tmux options rather than baked into `window_name`, it survives pane switches and does not interfere with automatic/window-name plugins.

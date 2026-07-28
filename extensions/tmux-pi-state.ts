@@ -7,9 +7,9 @@ const TMUX_TIMEOUT_MS = 500;
 
 type PiTmuxState = "working" | "waiting";
 
-const STATE_VALUES: Record<PiTmuxState, string> = {
-	working: "π:\uF013", // nf-fa-cog
-	waiting: "π:\uF00C", // nf-fa-check
+const STATE_ICONS: Record<PiTmuxState, string> = {
+	working: "\uF013", // nf-fa-cog
+	waiting: "\uF00C", // nf-fa-check
 };
 
 function enabled(): boolean {
@@ -51,15 +51,31 @@ export default function (pi: ExtensionAPI) {
 		return agentActive ? "working" : "waiting";
 	}
 
-	function setWindowState(value: string): Promise<void> {
+	async function publishWindowState() {
+		await captureWindowId();
+		if (windowId === undefined) {
+			return;
+		}
+
+		const output = await tmux(["list-panes", "-t", windowId, "-F", "#{@pi_pane_state}"]);
+		const icons = (output ?? "")
+			.split("\n")
+			.map((line) => line.trim())
+			.filter(Boolean);
+
+		if (icons.length === 0) {
+			await tmux(["set-option", "-wqu", "-t", windowId, "@pi_state"]);
+		} else {
+			await tmux(["set-option", "-wq", "-t", windowId, "@pi_state", `π:${icons.join(" ")}`]);
+		}
+		await tmux(["refresh-client", "-S"]);
+	}
+
+	function setPaneState(icon: string): Promise<void> {
 		updateQueue = updateQueue
 			.then(async () => {
-				await captureWindowId();
-				if (windowId === undefined) {
-					return;
-				}
-				await tmux(["set-option", "-wq", "-t", windowId, "@pi_state", value]);
-				await tmux(["refresh-client", "-S"]);
+				await tmux(["set-option", "-pq", "-t", paneId, "@pi_pane_state", icon]);
+				await publishWindowState();
 			})
 			.catch(() => undefined);
 		return updateQueue;
@@ -71,15 +87,12 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 		lastState = state;
-		void setWindowState(STATE_VALUES[state]);
+		void setPaneState(STATE_ICONS[state]);
 	}
 
-	async function clearWindowState(): Promise<void> {
-		if (windowId === undefined) {
-			return;
-		}
-		await tmux(["set-option", "-wqu", "-t", windowId, "@pi_state"]);
-		await tmux(["refresh-client", "-S"]);
+	async function clearPaneState(): Promise<void> {
+		await tmux(["set-option", "-pqu", "-t", paneId, "@pi_pane_state"]);
+		await publishWindowState();
 	}
 
 	pi.on("session_start", async (_event, ctx) => {
@@ -113,6 +126,6 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 		await updateQueue;
-		await clearWindowState();
+		await clearPaneState();
 	});
 }
