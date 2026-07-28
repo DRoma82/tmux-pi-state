@@ -8,8 +8,8 @@ const TMUX_TIMEOUT_MS = 500;
 type PiTmuxState = "working" | "waiting";
 
 const STATE_SUFFIXES: Record<PiTmuxState, string> = {
-	working: "π:Working",
-	waiting: "π:Waiting",
+	working: "π:\uF013", // nf-fa-cog
+	waiting: "π:\uF00C", // nf-fa-check
 };
 
 function enabled(): boolean {

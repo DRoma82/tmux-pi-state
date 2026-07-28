@@ -5,9 +5,11 @@ Pi package that shows Pi coding-agent state directly in the tmux window name.
 The extension renames the current tmux window by appending a state suffix to its existing name:
 
 ```text
-pi π:Working
-pi π:Waiting
+pi π:
+pi π:
 ```
+
+(gear = working, check = waiting — Nerd Font glyphs, `nf-fa-cog` U+F013 and `nf-fa-check` U+F00C. Requires a Nerd Font in your terminal.)
 
 Because it renames the window (not just the pane), the state stays visible in `#W` / `window-status-format` even after you switch panes within that window.
 
@@ -32,8 +34,8 @@ Then restart Pi or run `/reload`.
 The Pi extension listens for Pi lifecycle events and renames the current tmux window:
 
 - `session_start` -> captures the window's original name and `automatic-rename` setting
-- `agent_start` -> `<original name> π:Working`
-- `agent_settled` / idle -> `<original name> π:Waiting`
+- `agent_start` -> `<original name> π:` + gear icon (working)
+- `agent_settled` / idle -> `<original name> π:` + check icon (waiting)
 
 On shutdown, it restores the window's original name and `automatic-rename` setting.
 
