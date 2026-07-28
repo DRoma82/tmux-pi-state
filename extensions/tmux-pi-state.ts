@@ -7,7 +7,7 @@ const TMUX_TIMEOUT_MS = 500;
 
 type PiTmuxState = "working" | "waiting";
 
-const STATE_SUFFIXES: Record<PiTmuxState, string> = {
+const STATE_VALUES: Record<PiTmuxState, string> = {
 	working: "π:\uF013", // nf-fa-cog
 	waiting: "π:\uF00C", // nf-fa-check
 };
@@ -36,26 +36,14 @@ export default function (pi: ExtensionAPI) {
 
 	const paneId = process.env.TMUX_PANE!;
 	let windowId: string | undefined;
-	let originalWindowName: string | undefined;
-	let originalAutomaticRename: string | undefined;
 	let agentActive = false;
 	let lastState: PiTmuxState | undefined;
 	let updateQueue = Promise.resolve();
 	let rootSession = false;
 
-	async function captureOriginalWindowState() {
+	async function captureWindowId() {
 		if (windowId === undefined) {
 			windowId = await tmux(["display-message", "-p", "-t", paneId, "#{window_id}"]);
-		}
-		if (windowId === undefined) {
-			return;
-		}
-		if (originalWindowName === undefined) {
-			originalWindowName = (await tmux(["display-message", "-p", "-t", windowId, "#{window_name}"])) ?? "";
-		}
-		if (originalAutomaticRename === undefined) {
-			const windowValue = await tmux(["show-window-options", "-v", "-t", windowId, "automatic-rename"]);
-			originalAutomaticRename = windowValue || (await tmux(["show-window-options", "-g", "-v", "automatic-rename"])) || "on";
 		}
 	}
 
@@ -63,14 +51,15 @@ export default function (pi: ExtensionAPI) {
 		return agentActive ? "working" : "waiting";
 	}
 
-	function setWindowName(name: string): Promise<void> {
+	function setWindowState(value: string): Promise<void> {
 		updateQueue = updateQueue
 			.then(async () => {
-				await captureOriginalWindowState();
+				await captureWindowId();
 				if (windowId === undefined) {
 					return;
 				}
-				await tmux(["rename-window", "-t", windowId, name]);
+				await tmux(["set-option", "-wq", "-t", windowId, "@pi_state", value]);
+				await tmux(["refresh-client", "-S"]);
 			})
 			.catch(() => undefined);
 		return updateQueue;
@@ -82,19 +71,15 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 		lastState = state;
-		const base = originalWindowName ?? "";
-		const name = base ? `${base} ${STATE_SUFFIXES[state]}` : STATE_SUFFIXES[state];
-		void setWindowName(name);
+		void setWindowState(STATE_VALUES[state]);
 	}
 
-	async function restoreWindowState(): Promise<void> {
-		if (windowId === undefined || originalWindowName === undefined) {
+	async function clearWindowState(): Promise<void> {
+		if (windowId === undefined) {
 			return;
 		}
-		await tmux(["rename-window", "-t", windowId, originalWindowName]);
-		if (originalAutomaticRename === "on") {
-			await tmux(["set-window-option", "-t", windowId, "automatic-rename", "on"]);
-		}
+		await tmux(["set-option", "-wqu", "-t", windowId, "@pi_state"]);
+		await tmux(["refresh-client", "-S"]);
 	}
 
 	pi.on("session_start", async (_event, ctx) => {
@@ -103,7 +88,7 @@ export default function (pi: ExtensionAPI) {
 		}
 		rootSession = true;
 		agentActive = ctx?.isIdle?.() === false;
-		await captureOriginalWindowState();
+		await captureWindowId();
 		publishState(true);
 	});
 
@@ -128,6 +113,6 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 		await updateQueue;
-		await restoreWindowState();
+		await clearWindowState();
 	});
 }

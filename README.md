@@ -1,17 +1,22 @@
 # tmux-pi-state
 
-Pi package that shows Pi coding-agent state directly in the tmux window name.
+Pi package that exposes Pi coding-agent state to tmux as a window-scoped user option.
 
-The extension renames the current tmux window by appending a state suffix to its existing name:
+The extension sets `@pi_state` on the tmux window where Pi was started:
 
 ```text
-pi π:
-pi π:
+π:  # working, nf-fa-cog U+F013
+π:  # waiting, nf-fa-check U+F00C
 ```
 
-(gear = working, check = waiting — Nerd Font glyphs, `nf-fa-cog` U+F013 and `nf-fa-check` U+F00C. Requires a Nerd Font in your terminal.)
+Render it anywhere tmux formats are supported, usually next to `#W` in the window status format:
 
-Because it renames the window (not just the pane), the state stays visible in `#W` / `window-status-format` even after you switch panes within that window.
+```tmux
+set -ga window-status-format " #I: #W #{@pi_state} "
+set -ga window-status-current-format " #I: #W #{@pi_state} "
+```
+
+This avoids racing other window renamers: Pi does not call `rename-window`; it only updates the `@pi_state` cache. Tools such as `tmux-window-name` can continue owning the actual window name, while the status line displays Pi state alongside it.
 
 ## Install
 
@@ -27,19 +32,18 @@ pi install git:git@github.com:DRoma82/tmux-pi-state
 
 Then restart Pi or run `/reload`.
 
-> If you also have a manually copied `tmux-pi-state.ts` in `~/.pi/agent/extensions/`, remove it before installing the package to avoid duplicate window renames.
+> If you also have a manually copied `tmux-pi-state.ts` in `~/.pi/agent/extensions/`, remove it before installing the package to avoid duplicate updates.
 
 ## How it works
 
-The Pi extension listens for Pi lifecycle events and renames the current tmux window:
+The Pi extension listens for Pi lifecycle events and updates a tmux window option:
 
-- `session_start` -> captures the window's original name and `automatic-rename` setting
-- `agent_start` -> `<original name> π:` + gear icon (working)
-- `agent_settled` / idle -> `<original name> π:` + check icon (waiting)
+- `session_start` -> captures the current tmux window ID
+- `agent_start` -> sets `@pi_state` to `π:` + gear icon
+- `agent_settled` / idle -> sets `@pi_state` to `π:` + check icon
+- `session_shutdown` -> unsets `@pi_state`
 
-On shutdown, it restores the window's original name and `automatic-rename` setting.
-
-No tmux-side plugin or configuration is required — the renamed window name shows up automatically in any tmux status format that already references `#W` (window name), such as `window-status-format`.
+No tmux-side plugin is required. The glyphs require a Nerd Font in your terminal.
 
 ## Options
 
@@ -53,5 +57,5 @@ PI_TMUX_STATE=0 pi
 
 ## Notes
 
-- This only tracks Pi state for the pane where Pi was started (the "root" session). If you have multiple Pi sessions open in different panes of the same window, only the last one to update the window name wins.
-- If `automatic-rename` was on for the window before Pi started, it is temporarily turned off while Pi manages the window name, then restored on shutdown.
+- This only tracks Pi state for the window where Pi was started. If you have multiple Pi sessions open in different panes of the same window, only the last one to update `@pi_state` wins.
+- Because the state is stored as a tmux window option rather than baked into `window_name`, it survives pane switches and does not interfere with automatic/window-name plugins.

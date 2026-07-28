@@ -1,7 +1,7 @@
 {
   "name": "tmux-pi-state",
   "version": "0.1.0",
-  "description": "Pi extension that shows Pi coding-agent state in the current tmux window name.",
+  "description": "Pi extension that exposes Pi coding-agent state as a tmux window option.",
   "keywords": [
     "tmux",
     "pi-package",
