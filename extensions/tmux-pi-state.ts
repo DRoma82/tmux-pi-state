@@ -5,11 +5,12 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 const execFileAsync = promisify(execFile);
 const TMUX_TIMEOUT_MS = 500;
 
-type PiTmuxState = "working" | "waiting";
+type PiTmuxState = "working" | "waiting" | "unseen";
 
-const STATE_TITLES: Record<PiTmuxState, string> = {
-	working: "π: ⏳ working",
-	waiting: "π: ⏸ waiting",
+const STATE_ICONS: Record<PiTmuxState, string> = {
+	working: "\uF013", // nf-fa-cog
+	waiting: "\uF00C", // nf-fa-check
+	unseen: "\uF06A", // nf-fa-exclamation_circle
 };
 
 function enabled(): boolean {
@@ -35,15 +36,15 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	const paneId = process.env.TMUX_PANE!;
-	let originalPaneTitle: string | undefined;
+	let windowId: string | undefined;
 	let agentActive = false;
 	let lastState: PiTmuxState | undefined;
 	let updateQueue = Promise.resolve();
 	let rootSession = false;
 
-	async function captureOriginalPaneTitle() {
-		if (originalPaneTitle === undefined) {
-			originalPaneTitle = (await tmux(["display-message", "-p", "-t", paneId, "#{pane_title}"])) ?? "";
+	async function captureWindowId() {
+		if (windowId === undefined) {
+			windowId = await tmux(["display-message", "-p", "-t", paneId, "#{window_id}"]);
 		}
 	}
 
@@ -51,29 +52,55 @@ export default function (pi: ExtensionAPI) {
 		return agentActive ? "working" : "waiting";
 	}
 
-	function setPaneTitle(title: string): Promise<void> {
+	async function windowIsActive(): Promise<boolean> {
+		await captureWindowId();
+		if (windowId === undefined) {
+			return true;
+		}
+		return (await tmux(["display-message", "-p", "-t", windowId, "#{window_active}"])) === "1";
+	}
+
+	async function publishWindowState() {
+		await captureWindowId();
+		if (windowId === undefined) {
+			return;
+		}
+
+		const output = await tmux(["list-panes", "-t", windowId, "-F", "#{@pi_pane_state}"]);
+		const icons = (output ?? "")
+			.split("\n")
+			.map((line) => line.trim())
+			.filter(Boolean);
+
+		if (icons.length === 0) {
+			await tmux(["set-option", "-wqu", "-t", windowId, "@pi_state"]);
+		} else {
+			await tmux(["set-option", "-wq", "-t", windowId, "@pi_state", `π:${icons.join(" ")}`]);
+		}
+		await tmux(["refresh-client", "-S"]);
+	}
+
+	function setPaneState(icon: string): Promise<void> {
 		updateQueue = updateQueue
 			.then(async () => {
-				await captureOriginalPaneTitle();
-				await tmux(["select-pane", "-t", paneId, "-T", title]);
+				await tmux(["set-option", "-pq", "-t", paneId, "@pi_pane_state", icon]);
+				await publishWindowState();
 			})
 			.catch(() => undefined);
 		return updateQueue;
 	}
 
-	function publishState(force = false): void {
-		const state = desiredState();
+	function publishState(state = desiredState(), force = false): void {
 		if (!force && state === lastState) {
 			return;
 		}
 		lastState = state;
-		void setPaneTitle(STATE_TITLES[state]);
+		void setPaneState(STATE_ICONS[state]);
 	}
 
-	async function restorePaneTitle(): Promise<void> {
-		if (originalPaneTitle !== undefined) {
-			await tmux(["select-pane", "-t", paneId, "-T", originalPaneTitle]);
-		}
+	async function clearPaneState(): Promise<void> {
+		await tmux(["set-option", "-pqu", "-t", paneId, "@pi_pane_state"]);
+		await publishWindowState();
 	}
 
 	pi.on("session_start", async (_event, ctx) => {
@@ -82,7 +109,7 @@ export default function (pi: ExtensionAPI) {
 		}
 		rootSession = true;
 		agentActive = ctx?.isIdle?.() === false;
-		await captureOriginalPaneTitle();
+		await captureWindowId();
 		publishState(true);
 	});
 
@@ -98,8 +125,14 @@ export default function (pi: ExtensionAPI) {
 		if (!rootSession || ctx?.isIdle?.() !== true) {
 			return;
 		}
+
+		const finishedWork = agentActive;
 		agentActive = false;
-		publishState();
+
+		void (async () => {
+			const state = finishedWork && !(await windowIsActive()) ? "unseen" : "waiting";
+			publishState(state);
+		})();
 	});
 
 	pi.on("session_shutdown", async () => {
@@ -107,6 +140,6 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 		await updateQueue;
-		await restorePaneTitle();
+		await clearPaneState();
 	});
 }

@@ -1,33 +1,34 @@
 # tmux-pi-state
 
-TPM-compatible tmux plugin and Pi package for showing Pi coding-agent state in tmux.
+Pi package that exposes Pi coding-agent state to tmux as window/pane-scoped user options.
 
-The Pi extension updates the current tmux pane title to values like:
+Each Pi instance sets `@pi_pane_state` on its own tmux pane, then the extension aggregates all Pi pane states in that window into `@pi_state`:
 
 ```text
-π: ⏳ working
-π: ⏸ waiting
+π:      # one working Pi pane
+π:      # one waiting Pi pane
+π:      # one Pi pane finished while its window was inactive
+π:     # two waiting Pi panes in the same window
+π:     # one waiting, one working
+π:     # one waiting, one unseen background completion
 ```
 
-The tmux plugin adds a `#{pi-state}` placeholder that expands to that pane title only when it looks like a Pi state. Otherwise it expands to nothing.
+Glyphs:
 
-## Install
+- working: `nf-fa-cog` U+F013
+- waiting: `nf-fa-check` U+F00C
+- unseen/background completion: `nf-fa-exclamation_circle` U+F06A
 
-Install both sides: the tmux plugin with TPM, and the Pi extension with `pi install`.
-
-### 1. Install the tmux plugin with TPM
-
-Add the plugin to your tmux config before the TPM bootstrap line:
+Render it anywhere tmux formats are supported, usually next to `#W` in the window status format:
 
 ```tmux
-set -g @plugin 'DRoma82/tmux-pi-state'
+set -ga window-status-format " #I: #W #{@pi_state} "
+set -ga window-status-current-format " #I: #W #{@pi_state} "
 ```
 
-Then press `prefix + I` to install it with TPM, or run TPM's install script.
+This avoids racing other window renamers: Pi does not call `rename-window`; it only updates tmux user options. Tools such as `tmux-window-name` can continue owning the actual window name, while the status line displays Pi state alongside it.
 
-### 2. Install the Pi extension
-
-Install this same repository as a Pi package:
+## Install
 
 ```bash
 pi install git:github.com/DRoma82/tmux-pi-state
@@ -41,48 +42,21 @@ pi install git:git@github.com:DRoma82/tmux-pi-state
 
 Then restart Pi or run `/reload`.
 
-> If you also have a manually copied `tmux-pi-state.ts` in `~/.pi/agent/extensions/`, remove it before installing the package to avoid duplicate tmux title updates.
+> If you also have a manually copied `tmux-pi-state.ts` in `~/.pi/agent/extensions/`, remove it before installing the package to avoid duplicate updates.
 
-## Usage
+## How it works
 
-Use `#{pi-state}` in any tmux option that this plugin interpolates. By default, it interpolates:
+The Pi extension listens for Pi lifecycle events and updates tmux options:
 
-```text
-window-status-format window-status-current-format
-```
+- `session_start` -> captures the current tmux window ID
+- `agent_start` -> sets this pane's `@pi_pane_state` to the gear icon, then recomputes window `@pi_state`
+- `agent_settled` / idle while window is active -> sets this pane's `@pi_pane_state` to the check icon, then recomputes window `@pi_state`
+- `agent_settled` / idle after finishing while window is inactive -> sets this pane's `@pi_pane_state` to the exclamation-circle icon, then recomputes window `@pi_state`
+- `session_shutdown` -> unsets this pane's `@pi_pane_state`, then recomputes or unsets window `@pi_state`
 
-Example:
-
-```tmux
-set -ga window-status-format " #I: #W #{pi-state} "
-set -ga window-status-current-format " #I: #W #{pi-state} "
-```
-
-If a pane title is `π: ⏳ working`, the window entry can render like:
-
-```text
-1: pi π: ⏳ working
-```
-
-If no Pi state is present, `#{pi-state}` renders empty.
+No tmux-side plugin is required. The glyphs require a Nerd Font in your terminal.
 
 ## Options
-
-### `@pi_state_interpolated_options`
-
-Space-separated tmux options where `#{pi-state}` should be replaced.
-
-Default:
-
-```tmux
-set -g @pi_state_interpolated_options 'window-status-format window-status-current-format'
-```
-
-Example including the status bar:
-
-```tmux
-set -g @pi_state_interpolated_options 'status-left status-right window-status-format window-status-current-format'
-```
 
 ### `PI_TMUX_STATE`
 
@@ -92,19 +66,10 @@ Set to `0` to disable the Pi extension without uninstalling the package:
 PI_TMUX_STATE=0 pi
 ```
 
-## How it works
+## Notes
 
-TPM executes `tmux-pi-state.tmux`, which replaces literal `#{pi-state}` placeholders in configured tmux options with a script-backed tmux format:
-
-```tmux
-#(.../scripts/pi-state.sh "#{pane_id}")
-```
-
-The helper script reads that pane's title and prints it only when it starts with `π:`.
-
-The Pi extension listens for Pi lifecycle events and updates the current pane title:
-
-- `agent_start` -> `π: ⏳ working`
-- `agent_settled` / idle -> `π: ⏸ waiting`
-
-On shutdown, it restores the pane's original title.
+- `@pi_state` is ordered by tmux pane order in the window.
+- If a Pi process exits cleanly, it removes only its own pane state and leaves other Pi pane states intact.
+- The unseen/background-completion marker is extension-only: it does not auto-clear on focus. It changes the next time that Pi instance publishes a state, such as when it starts working again or shuts down.
+- If Pi crashes or tmux kills the pane without a clean shutdown, that pane's `@pi_pane_state` may remain until the pane is closed or another Pi state update recomputes the window aggregate.
+- Because state is stored as tmux options rather than baked into `window_name`, it survives pane switches and does not interfere with automatic/window-name plugins.
