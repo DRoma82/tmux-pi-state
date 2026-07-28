@@ -1,33 +1,17 @@
 # tmux-pi-state
 
-TPM-compatible tmux plugin and Pi package for showing Pi coding-agent state in tmux.
+Pi package that shows Pi coding-agent state directly in the tmux window name.
 
-The Pi extension updates the current tmux pane title to values like:
+The extension renames the current tmux window by appending a state suffix to its existing name:
 
 ```text
-π:Working
-π:Waiting
+pi π:Working
+pi π:Waiting
 ```
 
-The tmux plugin adds a `#{pi-state}` placeholder that expands to that pane title only when it looks like a Pi state. Otherwise it expands to nothing.
+Because it renames the window (not just the pane), the state stays visible in `#W` / `window-status-format` even after you switch panes within that window.
 
 ## Install
-
-Install both sides: the tmux plugin with TPM, and the Pi extension with `pi install`.
-
-### 1. Install the tmux plugin with TPM
-
-Add the plugin to your tmux config before the TPM bootstrap line:
-
-```tmux
-set -g @plugin 'DRoma82/tmux-pi-state'
-```
-
-Then press `prefix + I` to install it with TPM, or run TPM's install script.
-
-### 2. Install the Pi extension
-
-Install this same repository as a Pi package:
 
 ```bash
 pi install git:github.com/DRoma82/tmux-pi-state
@@ -41,48 +25,21 @@ pi install git:git@github.com:DRoma82/tmux-pi-state
 
 Then restart Pi or run `/reload`.
 
-> If you also have a manually copied `tmux-pi-state.ts` in `~/.pi/agent/extensions/`, remove it before installing the package to avoid duplicate tmux title updates.
+> If you also have a manually copied `tmux-pi-state.ts` in `~/.pi/agent/extensions/`, remove it before installing the package to avoid duplicate window renames.
 
-## Usage
+## How it works
 
-Use `#{pi-state}` in any tmux option that this plugin interpolates. By default, it interpolates:
+The Pi extension listens for Pi lifecycle events and renames the current tmux window:
 
-```text
-window-status-format window-status-current-format
-```
+- `session_start` -> captures the window's original name and `automatic-rename` setting
+- `agent_start` -> `<original name> π:Working`
+- `agent_settled` / idle -> `<original name> π:Waiting`
 
-Example:
+On shutdown, it restores the window's original name and `automatic-rename` setting.
 
-```tmux
-set -ga window-status-format " #I: #W #{pi-state} "
-set -ga window-status-current-format " #I: #W #{pi-state} "
-```
-
-If a pane title is `π:Working`, the window entry can render like:
-
-```text
-1: pi π:Working
-```
-
-If no Pi state is present, `#{pi-state}` renders empty.
+No tmux-side plugin or configuration is required — the renamed window name shows up automatically in any tmux status format that already references `#W` (window name), such as `window-status-format`.
 
 ## Options
-
-### `@pi_state_interpolated_options`
-
-Space-separated tmux options where `#{pi-state}` should be replaced.
-
-Default:
-
-```tmux
-set -g @pi_state_interpolated_options 'window-status-format window-status-current-format'
-```
-
-Example including the status bar:
-
-```tmux
-set -g @pi_state_interpolated_options 'status-left status-right window-status-format window-status-current-format'
-```
 
 ### `PI_TMUX_STATE`
 
@@ -92,19 +49,7 @@ Set to `0` to disable the Pi extension without uninstalling the package:
 PI_TMUX_STATE=0 pi
 ```
 
-## How it works
+## Notes
 
-TPM executes `tmux-pi-state.tmux`, which replaces literal `#{pi-state}` placeholders in configured tmux options with a script-backed tmux format:
-
-```tmux
-#(.../scripts/pi-state.sh "#{pane_id}")
-```
-
-The helper script reads that pane's title and prints it only when it starts with `π:`.
-
-The Pi extension listens for Pi lifecycle events and updates the current pane title:
-
-- `agent_start` -> `π:Working`
-- `agent_settled` / idle -> `π:Waiting`
-
-On shutdown, it restores the pane's original title.
+- This only tracks Pi state for the pane where Pi was started (the "root" session). If you have multiple Pi sessions open in different panes of the same window, only the last one to update the window name wins.
+- If `automatic-rename` was on for the window before Pi started, it is temporarily turned off while Pi manages the window name, then restored on shutdown.

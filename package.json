@@ -1,10 +1,9 @@
 {
   "name": "tmux-pi-state",
   "version": "0.1.0",
-  "description": "TPM plugin and Pi extension for showing Pi coding-agent state in tmux.",
+  "description": "Pi extension that shows Pi coding-agent state in the current tmux window name.",
   "keywords": [
     "tmux",
-    "tpm",
     "pi-package",
     "pi-coding-agent"
   ],

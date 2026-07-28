@@ -7,7 +7,7 @@ const TMUX_TIMEOUT_MS = 500;
 
 type PiTmuxState = "working" | "waiting";
 
-const STATE_TITLES: Record<PiTmuxState, string> = {
+const STATE_SUFFIXES: Record<PiTmuxState, string> = {
 	working: "π:Working",
 	waiting: "π:Waiting",
 };
@@ -35,15 +35,27 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	const paneId = process.env.TMUX_PANE!;
-	let originalPaneTitle: string | undefined;
+	let windowId: string | undefined;
+	let originalWindowName: string | undefined;
+	let originalAutomaticRename: string | undefined;
 	let agentActive = false;
 	let lastState: PiTmuxState | undefined;
 	let updateQueue = Promise.resolve();
 	let rootSession = false;
 
-	async function captureOriginalPaneTitle() {
-		if (originalPaneTitle === undefined) {
-			originalPaneTitle = (await tmux(["display-message", "-p", "-t", paneId, "#{pane_title}"])) ?? "";
+	async function captureOriginalWindowState() {
+		if (windowId === undefined) {
+			windowId = await tmux(["display-message", "-p", "-t", paneId, "#{window_id}"]);
+		}
+		if (windowId === undefined) {
+			return;
+		}
+		if (originalWindowName === undefined) {
+			originalWindowName = (await tmux(["display-message", "-p", "-t", windowId, "#{window_name}"])) ?? "";
+		}
+		if (originalAutomaticRename === undefined) {
+			const windowValue = await tmux(["show-window-options", "-v", "-t", windowId, "automatic-rename"]);
+			originalAutomaticRename = windowValue || (await tmux(["show-window-options", "-g", "-v", "automatic-rename"])) || "on";
 		}
 	}
 
@@ -51,12 +63,14 @@ export default function (pi: ExtensionAPI) {
 		return agentActive ? "working" : "waiting";
 	}
 
-	function setPaneTitle(title: string): Promise<void> {
+	function setWindowName(name: string): Promise<void> {
 		updateQueue = updateQueue
 			.then(async () => {
-				await captureOriginalPaneTitle();
-				await tmux(["select-pane", "-t", paneId, "-T", title]);
-				await tmux(["refresh-client", "-S"]);
+				await captureOriginalWindowState();
+				if (windowId === undefined) {
+					return;
+				}
+				await tmux(["rename-window", "-t", windowId, name]);
 			})
 			.catch(() => undefined);
 		return updateQueue;
@@ -68,13 +82,18 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 		lastState = state;
-		void setPaneTitle(STATE_TITLES[state]);
+		const base = originalWindowName ?? "";
+		const name = base ? `${base} ${STATE_SUFFIXES[state]}` : STATE_SUFFIXES[state];
+		void setWindowName(name);
 	}
 
-	async function restorePaneTitle(): Promise<void> {
-		if (originalPaneTitle !== undefined) {
-			await tmux(["select-pane", "-t", paneId, "-T", originalPaneTitle]);
-			await tmux(["refresh-client", "-S"]);
+	async function restoreWindowState(): Promise<void> {
+		if (windowId === undefined || originalWindowName === undefined) {
+			return;
+		}
+		await tmux(["rename-window", "-t", windowId, originalWindowName]);
+		if (originalAutomaticRename === "on") {
+			await tmux(["set-window-option", "-t", windowId, "automatic-rename", "on"]);
 		}
 	}
 
@@ -84,7 +103,7 @@ export default function (pi: ExtensionAPI) {
 		}
 		rootSession = true;
 		agentActive = ctx?.isIdle?.() === false;
-		await captureOriginalPaneTitle();
+		await captureOriginalWindowState();
 		publishState(true);
 	});
 
@@ -109,6 +128,6 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 		await updateQueue;
-		await restorePaneTitle();
+		await restoreWindowState();
 	});
 }
