@@ -90,7 +90,7 @@ export default function (pi: ExtensionAPI) {
 		return updateQueue;
 	}
 
-	function publishState(state = desiredState(), force = false): void {
+	function publishState(state: PiTmuxState = desiredState(), force = false): void {
 		if (!force && state === lastState) {
 			return;
 		}
@@ -110,7 +110,7 @@ export default function (pi: ExtensionAPI) {
 		rootSession = true;
 		agentActive = ctx?.isIdle?.() === false;
 		await captureWindowId();
-		publishState(true);
+		publishState(desiredState(), true);
 	});
 
 	pi.on("agent_start", () => {
