@@ -8,8 +8,8 @@ const TMUX_TIMEOUT_MS = 500;
 type PiTmuxState = "working" | "waiting";
 
 const STATE_TITLES: Record<PiTmuxState, string> = {
-	working: "π: working",
-	waiting: "π: waiting",
+	working: "π:Working",
+	waiting: "π:Waiting",
 };
 
 function enabled(): boolean {

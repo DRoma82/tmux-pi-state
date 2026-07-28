@@ -5,8 +5,8 @@ TPM-compatible tmux plugin and Pi package for showing Pi coding-agent state in t
 The Pi extension updates the current tmux pane title to values like:
 
 ```text
-π: working
-π: waiting
+π:Working
+π:Waiting
 ```
 
 The tmux plugin adds a `#{pi-state}` placeholder that expands to that pane title only when it looks like a Pi state. Otherwise it expands to nothing.
@@ -58,10 +58,10 @@ set -ga window-status-format " #I: #W #{pi-state} "
 set -ga window-status-current-format " #I: #W #{pi-state} "
 ```
 
-If a pane title is `π: working`, the window entry can render like:
+If a pane title is `π:Working`, the window entry can render like:
 
 ```text
-1: pi π: working
+1: pi π:Working
 ```
 
 If no Pi state is present, `#{pi-state}` renders empty.
@@ -104,7 +104,7 @@ The helper script reads that pane's title and prints it only when it starts with
 
 The Pi extension listens for Pi lifecycle events and updates the current pane title:
 
-- `agent_start` -> `π: working`
-- `agent_settled` / idle -> `π: waiting`
+- `agent_start` -> `π:Working`
+- `agent_settled` / idle -> `π:Waiting`
 
 On shutdown, it restores the pane's original title.
