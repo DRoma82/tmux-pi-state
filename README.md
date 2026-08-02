@@ -16,6 +16,7 @@ Each Pi instance sets `@pi_pane_state` on its own tmux pane, then the extension 
 Glyphs:
 
 - working: `nf-fa-cog` U+F013
+- asking (waiting for your input on an `ask_user_question` prompt): `nf-fa-question_circle` U+F059
 - waiting: `nf-fa-check` U+F00C
 - unseen/background completion: `nf-fa-exclamation_circle` U+F06A
 
@@ -50,6 +51,7 @@ The Pi extension listens for Pi lifecycle events and updates tmux options:
 
 - `session_start` -> captures the current tmux window ID
 - `agent_start` -> sets this pane's `@pi_pane_state` to the gear icon, then recomputes window `@pi_state`
+- `tool_execution_start` / `tool_execution_end` for the `ask_user_question` tool -> while the prompt is awaiting your input, sets this pane's `@pi_pane_state` to the question-circle icon, then reverts to the gear icon once you answer
 - `agent_settled` / idle while window is active -> sets this pane's `@pi_pane_state` to the check icon, then recomputes window `@pi_state`
 - `agent_settled` / idle after finishing while window is inactive -> sets this pane's `@pi_pane_state` to the exclamation-circle icon, then recomputes window `@pi_state`
 - `session_shutdown` -> unsets this pane's `@pi_pane_state`, then recomputes or unsets window `@pi_state`

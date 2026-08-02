@@ -4,11 +4,13 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const execFileAsync = promisify(execFile);
 const TMUX_TIMEOUT_MS = 500;
+const ASK_USER_QUESTION_TOOL = "ask_user_question";
 
-type PiTmuxState = "working" | "waiting" | "unseen";
+type PiTmuxState = "working" | "asking" | "waiting" | "unseen";
 
 const STATE_ICONS: Record<PiTmuxState, string> = {
 	working: "\uF013", // nf-fa-cog
+	asking: "\uF059", // nf-fa-question_circle
 	waiting: "\uF00C", // nf-fa-check
 	unseen: "\uF06A", // nf-fa-exclamation_circle
 };
@@ -38,6 +40,7 @@ export default function (pi: ExtensionAPI) {
 	const paneId = process.env.TMUX_PANE!;
 	let windowId: string | undefined;
 	let agentActive = false;
+	let pendingQuestions = 0;
 	let lastState: PiTmuxState | undefined;
 	let updateQueue = Promise.resolve();
 	let rootSession = false;
@@ -49,6 +52,9 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	function desiredState(): PiTmuxState {
+		if (pendingQuestions > 0) {
+			return "asking";
+		}
 		return agentActive ? "working" : "waiting";
 	}
 
@@ -118,6 +124,22 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 		agentActive = true;
+		publishState();
+	});
+
+	pi.on("tool_execution_start", (event) => {
+		if (!rootSession || event?.toolName !== ASK_USER_QUESTION_TOOL) {
+			return;
+		}
+		pendingQuestions += 1;
+		publishState();
+	});
+
+	pi.on("tool_execution_end", (event) => {
+		if (!rootSession || event?.toolName !== ASK_USER_QUESTION_TOOL) {
+			return;
+		}
+		pendingQuestions = Math.max(0, pendingQuestions - 1);
 		publishState();
 	});
 
