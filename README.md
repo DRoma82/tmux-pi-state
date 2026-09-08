@@ -4,13 +4,15 @@ Pi package that exposes Pi coding-agent state to tmux as window/pane-scoped user
 
 Each Pi instance sets `@pi_pane_state` on its own tmux pane, then the extension aggregates all Pi pane states in that window into `@pi_state`:
 
+The examples below use state names because GitHub does not load Nerd Fonts. In tmux, each bracketed name appears as its corresponding glyph.
+
 ```text
-π:      # one working Pi pane
-π:      # one waiting Pi pane
-π:      # one Pi pane finished while its window was inactive
-π:     # two waiting Pi panes in the same window
-π:     # one waiting, one working
-π:     # one waiting, one unseen background completion
+π:[working]            # one working Pi pane
+π:[waiting]            # one waiting Pi pane
+π:[unseen]             # one Pi pane finished while its window was inactive
+π:[waiting] [waiting]  # two waiting Pi panes in the same window
+π:[waiting] [working]  # one waiting, one working
+π:[waiting] [unseen]   # one waiting, one unseen background completion
 ```
 
 Glyphs:
