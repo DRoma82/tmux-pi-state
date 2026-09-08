@@ -49,7 +49,7 @@ Then restart Pi or run `/reload`.
 
 The Pi extension listens for Pi lifecycle events and updates tmux options:
 
-- `session_start` -> captures the current tmux window ID
+- `session_start` -> for interactive sessions, captures the current tmux window ID and publishes the initial working or waiting state
 - `agent_start` -> sets this pane's `@pi_pane_state` to the gear icon, then recomputes window `@pi_state`
 - `tool_execution_start` / `tool_execution_end` for the `ask_user_question` tool -> while the prompt is awaiting your input, sets this pane's `@pi_pane_state` to the question-circle icon, then reverts to the gear icon once you answer
 - `agent_settled` / idle while window is active -> sets this pane's `@pi_pane_state` to the check icon, then recomputes window `@pi_state`
@@ -73,5 +73,5 @@ PI_TMUX_STATE=0 pi
 - `@pi_state` is ordered by tmux pane order in the window.
 - If a Pi process exits cleanly, it removes only its own pane state and leaves other Pi pane states intact.
 - The unseen/background-completion marker is extension-only: it does not auto-clear on focus. It changes the next time that Pi instance publishes a state, such as when it starts working again or shuts down.
-- If Pi crashes or tmux kills the pane without a clean shutdown, that pane's `@pi_pane_state` may remain until the pane is closed or another Pi state update recomputes the window aggregate.
+- If Pi crashes while its pane remains open, that pane's `@pi_pane_state` remains stale until the pane closes or the option is cleared manually. If tmux closes the pane, the window's `@pi_state` may remain stale until another Pi state update recomputes it.
 - Because state is stored as tmux options rather than baked into `window_name`, it survives pane switches and does not interfere with automatic/window-name plugins.
