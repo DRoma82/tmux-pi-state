@@ -47,6 +47,22 @@ Then restart Pi or run `/reload`.
 
 > If you also have a manually copied `tmux-pi-state.ts` in `~/.pi/agent/extensions/`, remove it before installing the package to avoid duplicate updates.
 
+## Live Pi pane popup
+
+Requires tmux 3.3+ and fzf 0.73+. Add this binding to your tmux config, replacing the script path with your checkout or installed package path:
+
+```tmux
+bind-key P run-shell -b '"/absolute/path/to/tmux-pi-state/scripts/pi-panes.sh" #{q:client_name}'
+```
+
+Press your tmux prefix, then `P`, to search Pi panes across all sessions on the current tmux server. Each row shows the existing state glyph, session name, window index/name, and pane index/ID. Enter closes the popup and switches the originating client to that pane. Escape closes it without switching.
+
+The list refreshes every second while open, including panes opening or closing. Your search stays intact, and fzf tracks the highlighted session/window/pane by ID even when its state changes. An empty list stays open so newly started Pi panes can appear. Existing stale-state limitations still apply.
+
+You can also run `scripts/pi-panes.sh` directly from a tmux pane, or use `scripts/pi-panes.sh --list` to print the current rows without opening the popup.
+
+Run the lightweight shell check with `bash tests/pi-panes.sh`.
+
 ## How it works
 
 The Pi extension listens for Pi lifecycle events and updates tmux options:
